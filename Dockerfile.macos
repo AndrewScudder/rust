@@ -1,0 +1,46 @@
+# Dockerfile for macOS cross-compilation
+FROM ubuntu:22.04
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    cmake \
+    libssl-dev \
+    pkg-config \
+    clang \
+    llvm \
+    libxml2-dev \
+    libssl-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    wget \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Add macOS targets
+RUN rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+# Install osxcross (requires macOS SDK)
+# Note: This requires manual setup with macOS SDK
+# RUN git clone https://github.com/tpoechtrager/osxcross.git /opt/osxcross
+
+WORKDIR /app
+COPY . .
+
+# Build for both macOS architectures
+RUN cargo build --release --target x86_64-apple-darwin
+RUN cargo build --release --target aarch64-apple-darwin
+
+# Create release directory
+RUN mkdir -p releases
+RUN cp target/x86_64-apple-darwin/release/timecard releases/timecard-macos-x86_64
+RUN cp target/aarch64-apple-darwin/release/timecard releases/timecard-macos-aarch64
+
+CMD ["ls", "-la", "releases/"]

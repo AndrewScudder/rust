@@ -1,0 +1,49 @@
+FROM rust:1.75-slim
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add macOS targets
+RUN rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+# Set up build environment
+WORKDIR /app
+COPY . .
+
+# Create build script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "🔨 Attempting cross-compilation..."\n\
+\n\
+# Try to build for Intel Mac\n\
+echo "Building for Intel Mac..."\n\
+if cargo build --release --target x86_64-apple-darwin; then\n\
+    echo "✅ Intel Mac build successful!"\n\
+    mkdir -p releases\n\
+    cp target/x86_64-apple-darwin/release/timecard releases/timecard-macos-x86_64 || true\n\
+else\n\
+    echo "❌ Intel Mac build failed (missing SDK)"\n\
+fi\n\
+\n\
+# Try to build for Apple Silicon\n\
+echo "Building for Apple Silicon..."\n\
+if cargo build --release --target aarch64-apple-darwin; then\n\
+    echo "✅ Apple Silicon build successful!"\n\
+    mkdir -p releases\n\
+    cp target/aarch64-apple-darwin/release/timecard releases/timecard-macos-aarch64 || true\n\
+else\n\
+    echo "❌ Apple Silicon build failed (missing SDK)"\n\
+fi\n\
+\n\
+echo "📊 Build results:"\n\
+ls -la releases/ 2>/dev/null || echo "No builds completed"\n\
+echo ""\n\
+echo "💡 Note: Cross-compilation requires macOS SDK."\n\
+echo "   For successful builds, use GitHub Actions instead."\n\
+' > /opt/build.sh && chmod +x /opt/build.sh
+
+CMD ["/opt/build.sh"]
