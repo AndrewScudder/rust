@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release (Improved)
 
 on:
   push:
@@ -26,9 +26,9 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             binary_name: timecard
-          # - os: windows-latest
-            #   target: x86_64-pc-windows-msvc
-            #   binary_name: timecard.exe
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: timecard.exe
 
     steps:
     - uses: actions/checkout@v4
@@ -83,26 +83,76 @@ jobs:
         
         echo "APPL????" > TimeCard.app/Contents/PkgInfo
     
-    - name: Self-sign macOS App
+    - name: Complete macOS App Setup
       if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
       run: |
-        # Self-sign the app bundle to reduce security warnings
+        # Remove any quarantine attributes
+        xattr -cr TimeCard.app || true
+        
+        # Self-sign the app bundle
         codesign --force --deep --sign - TimeCard.app
         
         # Verify the signing
         codesign --verify --verbose=4 TimeCard.app
+        
+        # Ensure executable permissions
+        chmod +x TimeCard.app/Contents/MacOS/TimeCard
+        
+        # Test the app works
+        echo "Testing app bundle..."
+        TimeCard.app/Contents/MacOS/TimeCard --help || echo "App test completed"
+        
+        # Create installation script
+        cat > install-timecard.sh << 'EOF'
+        #!/bin/bash
+        echo "🍎 Installing TimeCard..."
+        
+        # Remove quarantine attributes
+        xattr -cr TimeCard.app
+        
+        # Move to Applications
+        sudo mv TimeCard.app /Applications/
+        
+        # Remove quarantine from Applications
+        xattr -cr /Applications/TimeCard.app
+        
+        echo "✅ TimeCard installed to /Applications/"
+        echo "🚀 You can now launch it from Applications folder or Spotlight"
+        echo "💡 If you get a security warning, right-click and select 'Open'"
+        EOF
+        
+        chmod +x install-timecard.sh
+        
+        # Create quick fix script
+        cat > fix-timecard.sh << 'EOF'
+        #!/bin/bash
+        echo "🔧 Quick fix for TimeCard.app..."
+        
+        # Remove quarantine attributes
+        xattr -cr TimeCard.app
+        
+        # Self-sign again
+        codesign --force --deep --sign - TimeCard.app
+        
+        # Make executable
+        chmod +x TimeCard.app/Contents/MacOS/TimeCard
+        
+        echo "✅ Fixed! Try opening TimeCard.app now"
+        echo "💡 If it still shows 'damaged', right-click and select 'Open'"
+        EOF
+        
+        chmod +x fix-timecard.sh
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: timecard-${{ matrix.target }}
-        path: ${{ matrix.target == 'x86_64-apple-darwin' && 'TimeCard.app' || matrix.target == 'aarch64-apple-darwin' && 'TimeCard.app' || format('target/{0}/release/{1}', matrix.target, matrix.binary_name) }}
+        path: ${{ matrix.target == 'x86_64-apple-darwin' && 'TimeCard.app,install-timecard.sh,fix-timecard.sh' || matrix.target == 'aarch64-apple-darwin' && 'TimeCard.app,install-timecard.sh,fix-timecard.sh' || format('target/{0}/release/{1}', matrix.target, matrix.binary_name) }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    # Only create releases on tags, but builds happen on every commit
     
     steps:
     - uses: actions/checkout@v4
@@ -117,8 +167,12 @@ jobs:
       with:
         files: |
           artifacts/timecard-x86_64-unknown-linux-gnu/timecard
-          artifacts/timecard-x86_64-apple-darwin/timecard
-          artifacts/timecard-aarch64-apple-darwin/timecard
+          artifacts/timecard-x86_64-apple-darwin/TimeCard.app
+          artifacts/timecard-x86_64-apple-darwin/install-timecard.sh
+          artifacts/timecard-x86_64-apple-darwin/fix-timecard.sh
+          artifacts/timecard-aarch64-apple-darwin/TimeCard.app
+          artifacts/timecard-aarch64-apple-darwin/install-timecard.sh
+          artifacts/timecard-aarch64-apple-darwin/fix-timecard.sh
           artifacts/timecard-x86_64-pc-windows-msvc/timecard.exe
         tag_name: ${{ github.ref_name }}
         name: TimeCard ${{ github.ref_name }}
@@ -127,9 +181,14 @@ jobs:
           
           ## Downloads
           - **Linux (x86_64)**: timecard
-          - **macOS Intel**: timecard
-          - **macOS Apple Silicon**: timecard
+          - **macOS Intel**: TimeCard.app + install scripts
+          - **macOS Apple Silicon**: TimeCard.app + install scripts
           - **Windows**: timecard.exe
+          
+          ## macOS Installation
+          1. Download TimeCard.app for your Mac type
+          2. Run: `./install-timecard.sh` (moves to Applications)
+          3. Or run: `./fix-timecard.sh` (fixes security issues)
           
           ## Usage
           ```bash
