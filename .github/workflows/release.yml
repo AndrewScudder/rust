@@ -83,7 +83,7 @@ jobs:
         
         echo "APPL????" > TimeCard.app/Contents/PkgInfo
     
-    - name: Self-sign macOS App
+    - name: Complete macOS App Setup
       if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
       run: |
         # Self-sign the app bundle to reduce security warnings
