@@ -38,11 +38,51 @@ jobs:
     - name: Build
       run: cargo build --release --target ${{ matrix.target }}
     
+    - name: Create macOS App Bundle
+      if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
+      run: |
+        mkdir -p TimeCard.app/Contents/MacOS
+        cp target/${{ matrix.target }}/release/timecard TimeCard.app/Contents/MacOS/TimeCard
+        chmod +x TimeCard.app/Contents/MacOS/TimeCard
+        
+        cat > TimeCard.app/Contents/Info.plist << 'EOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>TimeCard</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.andrewscudder.timecard</string>
+            <key>CFBundleName</key>
+            <string>TimeCard</string>
+            <key>CFBundleDisplayName</key>
+            <string>TimeCard</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleSignature</key>
+            <string>????</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.15</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>LSApplicationCategoryType</key>
+            <string>public.app-category.productivity</string>
+        </dict>
+        </plist>
+        EOF
+        
+        echo "APPL????" > TimeCard.app/Contents/PkgInfo
+    
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: timecard-${{ matrix.target }}
-        path: target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+        path: ${{ matrix.target == 'x86_64-apple-darwin' && 'TimeCard.app' || matrix.target == 'aarch64-apple-darwin' && 'TimeCard.app' || format('target/{0}/release/{1}', matrix.target, matrix.binary_name) }}
 
   release:
     needs: build
